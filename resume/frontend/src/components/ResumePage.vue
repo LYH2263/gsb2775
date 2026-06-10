@@ -1,6 +1,21 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
+
+const CATEGORY_LABELS: Record<string, string> = {
+  language: '编程语言',
+  framework: '框架',
+  database: '数据库',
+  cache: '缓存',
+  devops: 'DevOps',
+  frontend: '前端',
+}
+
+const MASTERY_THRESHOLD = 90
+
+function getCategoryLabel(cat: string): string {
+  return CATEGORY_LABELS[cat] ?? cat
+}
 
 interface Profile {
   name: string
@@ -60,6 +75,22 @@ interface ResumeResponse {
 const loading = ref(true)
 const error = ref<string | null>(null)
 const resume = ref<ResumeResponse | null>(null)
+const selectedCategory = ref('')
+
+const allCategories = computed(() => {
+  const skills = resume.value?.skills ?? []
+  const counts = new Map<string, number>()
+  for (const s of skills) {
+    counts.set(s.category, (counts.get(s.category) ?? 0) + 1)
+  }
+  return Array.from(counts.entries()).map(([cat, count]) => ({ cat, count }))
+})
+
+const filteredSkills = computed(() => {
+  const skills = resume.value?.skills ?? []
+  if (!selectedCategory.value) return skills
+  return skills.filter(s => s.category === selectedCategory.value)
+})
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8207/api/v1'
 
@@ -130,11 +161,32 @@ onMounted(() => {
         <div class="left-column">
           <el-card v-if="resume?.skills?.length" class="card" shadow="hover">
             <h2 class="section-title">技能特长</h2>
+            <div class="skill-filter">
+              <button
+                class="filter-btn"
+                :class="{ active: selectedCategory === '' }"
+                @click="selectedCategory = ''"
+              >
+                全部 ({{ resume!.skills.length }})
+              </button>
+              <button
+                v-for="c in allCategories"
+                :key="c.cat"
+                class="filter-btn"
+                :class="{ active: selectedCategory === c.cat }"
+                @click="selectedCategory = c.cat"
+              >
+                {{ getCategoryLabel(c.cat) }} ({{ c.count }})
+              </button>
+            </div>
             <div class="skills">
-              <div v-for="skill in resume!.skills" :key="skill.name" class="skill-item">
+              <div v-for="skill in filteredSkills" :key="skill.name" class="skill-item">
                 <div class="skill-header">
-                  <span class="skill-name">{{ skill.name }}</span>
-                  <el-tag size="small" type="success" round>{{ skill.category }}</el-tag>
+                  <span class="skill-name">
+                    {{ skill.name }}
+                    <el-tag v-if="skill.level >= MASTERY_THRESHOLD" class="mastery-badge" size="small" type="warning" effect="dark" round>精通</el-tag>
+                  </span>
+                  <el-tag size="small" type="success" round>{{ getCategoryLabel(skill.category) }}</el-tag>
                 </div>
                 <el-progress :percentage="skill.level" :stroke-width="8" striped />
                 <p v-if="skill.description" class="skill-desc">{{ skill.description }}</p>
@@ -323,6 +375,44 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   color: #111827;
+}
+
+.skill-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.filter-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-btn:hover {
+  border-color: #6366f1;
+  color: #6366f1;
+  background: #eef2ff;
+}
+
+.filter-btn.active {
+  border-color: #6366f1;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.mastery-badge {
+  margin-left: 6px;
+  vertical-align: middle;
+  transform: translateY(-1px);
 }
 
 .skills {
