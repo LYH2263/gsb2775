@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 
 interface Profile {
@@ -60,6 +60,31 @@ interface ResumeResponse {
 const loading = ref(true)
 const error = ref<string | null>(null)
 const resume = ref<ResumeResponse | null>(null)
+const selectedCategory = ref<string>('all')
+
+const MASTERY_THRESHOLD = 90
+
+const skillCategories = computed(() => {
+  if (!resume.value?.skills) return []
+  const categories = [...new Set(resume.value.skills.map(s => s.category))]
+  return categories
+})
+
+const categoryCountMap = computed(() => {
+  const map: Record<string, number> = { all: 0 }
+  if (!resume.value?.skills) return map
+  map.all = resume.value.skills.length
+  for (const skill of resume.value.skills) {
+    map[skill.category] = (map[skill.category] || 0) + 1
+  }
+  return map
+})
+
+const filteredSkills = computed(() => {
+  if (!resume.value?.skills) return []
+  if (selectedCategory.value === 'all') return resume.value.skills
+  return resume.value.skills.filter(s => s.category === selectedCategory.value)
+})
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8207/api/v1'
 
@@ -130,10 +155,40 @@ onMounted(() => {
         <div class="left-column">
           <el-card v-if="resume?.skills?.length" class="card" shadow="hover">
             <h2 class="section-title">技能特长</h2>
+            <div class="skill-filter">
+              <button
+                class="filter-btn"
+                :class="{ active: selectedCategory === 'all' }"
+                @click="selectedCategory = 'all'"
+              >
+                全部 ({{ categoryCountMap.all }})
+              </button>
+              <button
+                v-for="cat in skillCategories"
+                :key="cat"
+                class="filter-btn"
+                :class="{ active: selectedCategory === cat }"
+                @click="selectedCategory = cat"
+              >
+                {{ cat }} ({{ categoryCountMap[cat] || 0 }})
+              </button>
+            </div>
             <div class="skills">
-              <div v-for="skill in resume!.skills" :key="skill.name" class="skill-item">
+              <div v-for="skill in filteredSkills" :key="skill.name" class="skill-item">
                 <div class="skill-header">
-                  <span class="skill-name">{{ skill.name }}</span>
+                  <div class="skill-name-wrap">
+                    <span class="skill-name">{{ skill.name }}</span>
+                    <el-tag
+                      v-if="skill.level >= MASTERY_THRESHOLD"
+                      size="small"
+                      type="danger"
+                      effect="dark"
+                      round
+                      class="mastery-badge"
+                    >
+                      精通
+                    </el-tag>
+                  </div>
                   <el-tag size="small" type="success" round>{{ skill.category }}</el-tag>
                 </div>
                 <el-progress :percentage="skill.level" :stroke-width="8" striped />
@@ -325,6 +380,39 @@ onMounted(() => {
   color: #111827;
 }
 
+.skill-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.filter-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #4b5563;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-btn:hover {
+  color: #2563eb;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.filter-btn.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  border-color: transparent;
+}
+
 .skills {
   display: flex;
   flex-direction: column;
@@ -347,7 +435,17 @@ onMounted(() => {
   margin-bottom: 2px;
 }
 
+.skill-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .skill-name {
+  font-weight: 500;
+}
+
+.mastery-badge {
   font-weight: 500;
 }
 
