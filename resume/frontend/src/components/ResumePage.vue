@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 
 interface Profile {
@@ -60,6 +60,27 @@ interface ResumeResponse {
 const loading = ref(true)
 const error = ref<string | null>(null)
 const resume = ref<ResumeResponse | null>(null)
+
+const ALL_CATEGORY = '全部'
+const MASTER_LEVEL = 90
+const selectedCategory = ref<string>(ALL_CATEGORY)
+
+const skillCategories = computed<{ label: string; count: number }[]>(() => {
+  const skills = resume.value?.skills ?? []
+  const counts = new Map<string, number>()
+  for (const skill of skills) {
+    const key = skill.category || '其他'
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  const list = Array.from(counts.entries()).map(([label, count]) => ({ label, count }))
+  return [{ label: ALL_CATEGORY, count: skills.length }, ...list]
+})
+
+const filteredSkills = computed(() => {
+  const skills = resume.value?.skills ?? []
+  if (selectedCategory.value === ALL_CATEGORY) return skills
+  return skills.filter(s => (s.category || '其他') === selectedCategory.value)
+})
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8207/api/v1'
 
@@ -130,10 +151,28 @@ onMounted(() => {
         <div class="left-column">
           <el-card v-if="resume?.skills?.length" class="card" shadow="hover">
             <h2 class="section-title">技能特长</h2>
+            <div class="skill-filter">
+              <el-button
+                v-for="cat in skillCategories"
+                :key="cat.label"
+                size="small"
+                round
+                :type="selectedCategory === cat.label ? 'primary' : 'default'"
+                class="filter-btn"
+                @click="selectedCategory = cat.label"
+              >
+                {{ cat.label }} ({{ cat.count }})
+              </el-button>
+            </div>
             <div class="skills">
-              <div v-for="skill in resume!.skills" :key="skill.name" class="skill-item">
+              <div v-for="skill in filteredSkills" :key="skill.name" class="skill-item">
                 <div class="skill-header">
-                  <span class="skill-name">{{ skill.name }}</span>
+                  <span class="skill-name">
+                    {{ skill.name }}
+                    <el-tag v-if="skill.level >= MASTER_LEVEL" size="small" type="danger" effect="dark" round class="master-badge">
+                      精通
+                    </el-tag>
+                  </span>
                   <el-tag size="small" type="success" round>{{ skill.category }}</el-tag>
                 </div>
                 <el-progress :percentage="skill.level" :stroke-width="8" striped />
@@ -329,6 +368,25 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.skill-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #e5e7eb;
+}
+
+.filter-btn {
+  font-size: 12px;
+}
+
+.master-badge {
+  margin-left: 6px;
+  vertical-align: middle;
+  letter-spacing: 1px;
 }
 
 .skill-item {
